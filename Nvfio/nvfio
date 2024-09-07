@@ -7,7 +7,8 @@
 
 import os
 import argparse
-# import sys
+import getpass  
+import sys
 
 GPU_ID_VGA = "0000:01:00.0"
 GPU_ID_AUD = "0000:01:00.1"
@@ -19,7 +20,9 @@ VERSION = "1.0.0"
 
 driver_name = {
     "pcieport": "vfio-pci",
-    "nvidia": "nvidia"
+    "nvidia": "nvidia",
+    "vfio-pci": "vfio-pci",
+    "snd_hda_intel": "snd_hda_intel"
 }
 
 parser = argparse.ArgumentParser(
@@ -78,7 +81,7 @@ def to_host():
 
     os.system("modprobe -i nvidia-modeset")
     os.system("modprobe -i nvidia-drm")
-    
+
     return [state(GPU_ID_VGA), state(GPU_ID_AUD)]
 
 def switch(): 
@@ -95,15 +98,21 @@ def switch():
             print("Vfio nor nvidia driver in use, nothing to do.")
 
 def print_state():
-    print(f"Current drivers in use:\n GPU:{state(GPU_ID_VGA)}\n AUD:{state(GPU_ID_AUD)}")
+    print(f"Current drivers in use:\n GPU:{state(GPU_ID_VGA)}\n AUD:{state(GPU_ID_AUD)}\n")
 
 def state(id_dev:str):
-    symlink = os.readlink(PATH_DEVICE.format(id))
-    return driver_name[symlink.split("/")[-1]]
+    symlink = os.readlink(PATH_DEVICE.format(id_dev, "driver"))
+    return driver_name.get(symlink.split("/")[-1], symlink.split("/")[-1])
 
 if __name__ == "__main__":
     args = parser.parse_args()
     if args.switch:
-        switch()
+        if getpass.getuser() == "root":
+            switch()
+            sys.exit(0)
+        else:
+            print("please elevate permissions.")
+            sys.exit(1)
     else:
         print_state()
+        sys.exit(0)

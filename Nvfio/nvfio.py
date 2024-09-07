@@ -1,0 +1,112 @@
+#!/bin/python
+
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+
+import os
+import argparse
+import getpass
+# import sys
+
+GPU_ID_VGA = "0000:01:00.0"
+GPU_ID_AUD = "0000:01:00.1"
+GPU_ID_VGA_ = GPU_ID_VGA.replace(":", "_").replace(".", "_")
+GPU_ID_AUD_ = GPU_ID_AUD.replace(":", "_").replace(".", "_")
+PATH_DRIVER = "/sys/bus/pci/drivers/{}/{}"
+PATH_DEVICE = "/sys/bus/pci/devices/{}/{}"
+VERSION = "1.0.0"
+
+driver_name = {
+    "pcieport": "vfio-pci",
+    "nvidia": "nvidia",
+    "vfio-pci": "vfio-pci",
+    "snd_hda_intel": "snd_hda_intel"
+}
+
+parser = argparse.ArgumentParser(
+    prog="Nvfio",
+    description="Nvfio - Switches GPU drivers from vfio to nvidia and back",
+    formatter_class=argparse.RawDescriptionHelpFormatter
+)
+
+parser.add_argument(
+    "--version", action="version", version="%(prog)s {}".format(VERSION)
+)
+
+parser.add_argument(
+    "-p", "--print", action="store_true", help="prints current drivers in use"
+)
+
+parser.add_argument(
+    "-s", "--switch", action="store_true", help="switches current driver in use"
+)
+
+def echo(msg:str, path:str):
+    with open(path, "w") as file:
+        file.write(msg)
+
+def to_virtual():
+    # Passes the GPU to the vms
+    echo("vfio-pci", PATH_DEVICE.format(GPU_ID_VGA, "driver_override"))
+    echo("vfio-pci", PATH_DEVICE.format(GPU_ID_AUD, "driver_override"))
+
+    echo(GPU_ID_VGA, PATH_DRIVER.format("nvidia", "unbind"))
+    echo(GPU_ID_AUD, PATH_DRIVER.format("snd_hda_intel", "unbind"))
+
+    os.system("modprobe -i vfio_pci vfio_pci_core vfio_iommu_type1")
+    echo(GPU_ID_VGA, PATH_DRIVER.format("vfio-pci", "bind"))
+    echo(GPU_ID_AUD, PATH_DRIVER.format("vfio-pci", "bind"))
+
+    os.system(f"virsh nodedev-detach pci_{GPU_ID_VGA_}")
+    os.system(f"virsh nodedev-detach pci_{GPU_ID_AUD_}")
+    pass
+
+def to_host():
+    # Passes the GPU to the 
+    echo("nvidia", PATH_DEVICE.format(GPU_ID_VGA, "driver_override"))
+    echo("snd_hda_intel", PATH_DEVICE.format(GPU_ID_AUD, "driver_override"))
+
+    os.system(f"virsh nodedev-reattach pci_{GPU_ID_VGA_}")
+    os.system(f"virsh nodedev-reattach pci_{GPU_ID_AUD_}")
+
+    echo(GPU_ID_VGA, PATH_DRIVER.format("vfio-pci", "unbind"))
+    echo(GPU_ID_AUD, PATH_DRIVER.format("vfio-pci", "unbind"))
+
+    os.system("modprobe -i nvidia nvidia-uvm snd_hda_intel")
+
+    echo(GPU_ID_VGA, PATH_DRIVER.format("nvidia", "bind"))
+    echo(GPU_ID_AUD, PATH_DRIVER.format("snd_hda_intel", "bind"))
+
+    os.system("modprobe -i nvidia-modeset")
+    os.system("modprobe -i nvidia-drm")
+
+    return [state(GPU_ID_VGA), state(GPU_ID_AUD)]
+
+def switch(): 
+    match state(GPU_ID_VGA):
+        case "nvidia":
+            print("Switching to vfio-pci ...")
+            to_virtual()
+            print_state()
+        case "vfio-pci":
+            print("Switching to nvidia ...")
+            to_host()
+            print_state()
+        case _:
+            print("Vfio nor nvidia driver in use, nothing to do.")
+
+def print_state():
+    print(f"Current drivers in use:\n GPU:{state(GPU_ID_VGA)}\n AUD:{state(GPU_ID_AUD)}")
+
+def state(id_dev:str):
+    symlink = os.readlink(PATH_DEVICE.format(id_dev, "driver"))
+    return driver_name.get(symlink.split("/")[-1], symlink.split("/")[-1])
+
+if __name__ == "__main__":
+    args = parser.parse_args()
+    if args.switch:
+        switch()
+    else:
+        print_state()
