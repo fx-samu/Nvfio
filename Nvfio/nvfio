@@ -43,6 +43,14 @@ parser.add_argument(
     "-s", "--switch", action="store_true", help="switches current driver in use"
 )
 
+parser.add_argument(
+    "-mn", "--manualn", action="store_true", help="manual switch current driver to nvidia"
+)
+
+parser.add_argument(
+    "-mv", "--manualv", action="store_true", help="manual switch current driver to vfio"
+)
+
 def echo(msg:str, path:str):
     with open(path, "w") as file:
         file.write(msg)
@@ -105,14 +113,21 @@ def state(id_dev:str):
     return driver_name.get(symlink.split("/")[-1], symlink.split("/")[-1])
 
 if __name__ == "__main__":
+    if getpass.getuser() != "root":
+        print("please elevate permissions.")
+        sys.exit(1)
+
     args = parser.parse_args()
     if args.switch:
-        if getpass.getuser() == "root":
             switch()
             sys.exit(0)
-        else:
-            print("please elevate permissions.")
-            sys.exit(1)
+    
+    elif args.manualv:
+        to_virtual()
+        
+    elif args.manualn:
+        to_host()
+
     else:
         print_state()
         sys.exit(0)
