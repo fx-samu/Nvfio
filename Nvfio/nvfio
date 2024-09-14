@@ -82,11 +82,11 @@ def to_host():
     os.system(f"virsh nodedev-reattach pci_{GPU_ID_VGA_}")
     os.system(f"virsh nodedev-reattach pci_{GPU_ID_AUD_}")
 
-    time.sleep(0.2)
-
     echo(GPU_ID_VGA, PATH_DRIVER.format("vfio-pci", "unbind"))
     echo(GPU_ID_AUD, PATH_DRIVER.format("vfio-pci", "unbind"))
 
+    time.sleep(0.2)
+    
     os.system("modprobe -i nvidia nvidia-uvm snd_hda_intel")
 
     echo(GPU_ID_VGA, PATH_DRIVER.format("nvidia", "bind"))
