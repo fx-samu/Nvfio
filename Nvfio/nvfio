@@ -7,7 +7,8 @@
 
 import os
 import argparse
-import getpass  
+import getpass
+import time
 import sys
 
 GPU_ID_VGA = "0000:01:00.0"
@@ -67,6 +68,8 @@ def to_virtual():
     echo(GPU_ID_VGA, PATH_DRIVER.format("vfio-pci", "bind"))
     echo(GPU_ID_AUD, PATH_DRIVER.format("vfio-pci", "bind"))
 
+    time.sleep(0.2)
+
     os.system(f"virsh nodedev-detach pci_{GPU_ID_VGA_}")
     os.system(f"virsh nodedev-detach pci_{GPU_ID_AUD_}")
     pass
@@ -78,6 +81,8 @@ def to_host():
 
     os.system(f"virsh nodedev-reattach pci_{GPU_ID_VGA_}")
     os.system(f"virsh nodedev-reattach pci_{GPU_ID_AUD_}")
+
+    time.sleep(0.2)
 
     echo(GPU_ID_VGA, PATH_DRIVER.format("vfio-pci", "unbind"))
     echo(GPU_ID_AUD, PATH_DRIVER.format("vfio-pci", "unbind"))
